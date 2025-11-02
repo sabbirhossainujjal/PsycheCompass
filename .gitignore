@@ -1,0 +1,22 @@
+## data
+data
+dump
+
+## logs
+logs
+
+## environment
+.env
+.venv
+
+## others
+__pycache__
+
+## texts
+readme.md
+technical_docs.md
+
+
+## examples
+examples.py
+*.ipynb

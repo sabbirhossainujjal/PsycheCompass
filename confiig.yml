@@ -1,0 +1,234 @@
+# AgentMental Configuration File
+# ============================================================================
+
+# LLM Configuration
+llm:
+  # Provider: 'local' or 'gemini'
+  provider: "gemini"
+
+  # For Gemini API
+  model_name: "gemini-2.5-flash" # or 'gemini-1.5-pro'
+  api_key: null # Set via environment variable GEMINI_API_KEY or here
+
+  # For Local LLM (when provider: 'local')
+  # model_name: 'Qwen/Qwen2.5-14B-Instruct'
+  # base_url: 'http://localhost:8000/v1'  # vLLM or similar endpoint
+
+  # Generation parameters
+  temperature: 0.0
+  max_tokens: 1024
+
+# Agent Parameters
+agent_params:
+  # Maximum number of follow-up questions per topic
+  max_follow_ups: 3
+
+  # Necessity threshold (0-2 scale)
+  # If evaluation score < threshold, stop asking follow-ups
+  necessity_threshold: 1.0
+
+# Assessment Scale Configuration
+assessment_scale:
+  name: "PHQ-8"
+  description: "Patient Health Questionnaire - 8 items for depression screening"
+  threshold: 10 # Score >= 10 indicates depression
+
+  topics:
+    - name: "Loss of Interest"
+      description: "Little interest or pleasure in doing things"
+      rating_criteria:
+        0: "Not at all"
+        1: "Several days"
+        2: "More than half the days"
+        3: "Nearly every day"
+
+    - name: "Depressed Mood"
+      description: "Feeling down, depressed, or hopeless"
+      rating_criteria:
+        0: "Not at all"
+        1: "Several days"
+        2: "More than half the days"
+        3: "Nearly every day"
+
+    - name: "Sleep Problems"
+      description: "Trouble falling asleep, staying asleep, or sleeping too much"
+      rating_criteria:
+        0: "Not at all"
+        1: "Several days"
+        2: "More than half the days"
+        3: "Nearly every day"
+
+    - name: "Fatigue or Low Energy"
+      description: "Feeling tired or having little energy"
+      rating_criteria:
+        0: "Not at all"
+        1: "Several days"
+        2: "More than half the days"
+        3: "Nearly every day"
+
+    - name: "Appetite or Weight Changes"
+      description: "Poor appetite or overeating"
+      rating_criteria:
+        0: "Not at all"
+        1: "Several days"
+        2: "More than half the days"
+        3: "Nearly every day"
+
+    - name: "Low Self-Worth"
+      description: "Feeling bad about yourself or that you are a failure"
+      rating_criteria:
+        0: "Not at all"
+        1: "Several days"
+        2: "More than half the days"
+        3: "Nearly every day"
+
+    - name: "Concentration Difficulties"
+      description: "Trouble concentrating on things like reading or watching TV"
+      rating_criteria:
+        0: "Not at all"
+        1: "Several days"
+        2: "More than half the days"
+        3: "Nearly every day"
+
+    - name: "Psychomotor Changes"
+      description: "Moving or speaking slowly, or being fidgety/restless"
+      rating_criteria:
+        0: "Not at all"
+        1: "Several days"
+        2: "More than half the days"
+        3: "Nearly every day"
+
+# Agent Prompts
+agent_prompts:
+  # Question Generator Agent (AGq)
+  question_generator:
+    initial: |
+      You are a compassionate mental health professional conducting a clinical interview.
+
+      Topic: {topic}
+      Description: {description}
+
+      Previous conversation context:
+      {context}
+
+      Generate an empathetic, clear initial question to assess this topic. The question should:
+      - Be open-ended but focused on the specific symptom
+      - Use simple, non-clinical language
+      - Be appropriate given the user's background (shown in context)
+      - Refer to the past 2 weeks timeframe
+
+      Generate ONLY the question, no additional text.
+
+    followup: |
+      You are a compassionate mental health professional conducting a clinical interview.
+
+      Topic: {topic}
+
+      Current conversation:
+      {conversation}
+
+      Previous topics context:
+      {context}
+
+      The user's previous answer lacks detail. Generate a follow-up question to gather more specific information about:
+      - Frequency (how often does this occur?)
+      - Duration (how long has this been happening?)
+      - Severity (how intense is the experience?)
+      - Impact (how does this affect daily life, work, relationships?)
+
+      The question should:
+      - Be empathetic and non-judgmental
+      - Be easy to answer to reduce cognitive burden
+      - Focus on ONE aspect to avoid overwhelming the user
+      - Build naturally on the previous conversation
+
+      Generate ONLY the question, no additional text.
+
+  # Evaluation Agent (AGev)
+  evaluation: |
+    You are an evaluation agent assessing the adequacy of information for clinical diagnosis.
+
+    Topic: {topic}
+
+    Conversation:
+    {conversation}
+
+    Rating Criteria:
+    {rating_criteria}
+
+    Evaluate if the user's responses provide sufficient information to accurately score this topic according to the rating criteria.
+
+    Consider:
+    - Is the frequency clearly stated? (not at all / several days / more than half / nearly every day)
+    - Is the impact on daily functioning described?
+    - Is the duration mentioned?
+    - Are specific examples or details provided?
+
+    Assign a necessity score for further questioning:
+    0 = Sufficient information collected, ready to score
+    1 = Some information present but clarification needed
+    2 = Insufficient information, definitely need follow-up
+
+    Respond with ONLY the numeric score (0, 1, or 2) on the first line, then a brief explanation.
+
+  # Scoring Agent (AGs)
+  scoring: |
+    You are a clinical scoring agent. Analyze the conversation and assign a score.
+
+    Topic: {topic}
+
+    Conversation:
+    {conversation}
+
+    Rating Criteria:
+    {rating_criteria}
+
+    Based on the user's responses, assign a score (0-3) according to the rating criteria.
+
+    Your response should follow this format:
+    Score: [0/1/2/3]
+
+    Summary: [One-sentence summary of the user's experience with this symptom]
+
+    Basis: [Detailed explanation citing specific statements from the conversation that support this score]
+
+    Be objective and base your scoring strictly on the frequency and severity described by the user.
+
+  # Updating Agent (AGu)
+  updating: |
+    You are a clinical report generation agent. Create a comprehensive assessment summary.
+
+    Assessment Scale: {scale_name}
+
+    User Information:
+    {user_info}
+
+    Topic Scores and Summaries:
+    {topics_summary}
+
+    Total Score: {total_score}
+
+    Generate a comprehensive clinical report that includes:
+
+    1. OVERALL ASSESSMENT
+       - Summary of the user's mental health status
+       - Key symptoms identified
+       - Severity level based on total score
+
+    2. DETAILED FINDINGS
+       - Brief description of each topic area
+       - Notable patterns or concerns
+
+    3. RECOMMENDATIONS
+       - Suggested next steps (e.g., professional consultation, lifestyle changes)
+       - Resources or support options
+       - Follow-up considerations
+
+    Use empathetic, professional language. Be clear but supportive.
+
+# Output Configuration
+output:
+  save_results: true
+  output_directory: "./assessments"
+  include_full_conversation: true
+  include_timestamps: true
