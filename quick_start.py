@@ -169,7 +169,7 @@ def run_demo():
         return
     
     try:
-        from utils.agents import AgentMental
+        from main import AgentMental
         
         print("\nInitializing framework...")
         agent = AgentMental("config.yml")

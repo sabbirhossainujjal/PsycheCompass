@@ -1,299 +1,495 @@
-import yaml
+"""
+Agent Module
+
+Implements the four specialized agents:
+- QuestionGeneratorAgent (AGq)
+- EvaluationAgent (AGev)
+- ScoringAgent (AGs)
+- UpdatingAgent (AGu)
+"""
+
 import json
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Any, Tuple
+from abc import ABC, abstractmethod
 
-from utils.memory import TreeMemory, StatementNode
-from utils.llm import LLMInterface
-from utils.logger import get_logger
+from utils.logger import setup_logger
+from utils.memory import TreeMemory
+from utils.llm import LLMOrchestrator
 
-# ============================================================================ 
-# Agent System
-# ============================================================================ 
 
-from dotenv import load_dotenv
-
-class AgentMental:
-    """Main multi-agent framework for mental health assessment"""
+class BaseAgent(ABC):
+    """Base class for all agents"""
     
-    def __init__(self, config_path: str = "config.yml"):
-        load_dotenv()
-        # Load configuration
-        with open(config_path, 'r') as f:
-            self.config = yaml.safe_load(f)
-        
-        # Initialize LLM
-        self.llm = LLMInterface(self.config)
-        
-        # Load assessment scale
-        self.scale = self.config['assessment_scale']
-        self.scale_name = self.scale['name']
-        self.topics = self.scale['topics']
-        
-        # Agent parameters
-        self.max_follow_ups = self.config['agent_params']['max_follow_ups']
-        self.necessity_threshold = self.config['agent_params']['necessity_threshold']
-        
-        # Memory
-        self.memory: Optional[TreeMemory] = None
+    def __init__(self, llm: LLMOrchestrator, config: Dict[str, Any], name: str):
+        self.llm = llm
+        self.config = config
+        self.name = name
+        self.logger = setup_logger(f'agent_{name}', f'logs/agent_{name}.log')
+        self.logger.info(f"{name} initialized")
+    
+    @abstractmethod
+    def process(self, *args, **kwargs):
+        """Process method to be implemented by subclasses"""
+        pass
 
-        # Loggers
-        self.q_logger = get_logger("question_generator", "logs/question_generator.log")
-        self.eval_logger = get_logger("evaluation", "logs/evaluation.log")
-        self.scoring_logger = get_logger("scoring", "logs/scoring.log")
-        self.updating_logger = get_logger("updating", "logs/updating.log")
+
+class QuestionGeneratorAgent(BaseAgent):
+    """
+    AGq: Question Generator Agent
     
-    def start_assessment(self, user_id: str, user_info: dict = None):
-        """Start a new assessment session"""
-        self.memory = TreeMemory(user_id)
-        
-        if user_info:
-            self.memory.user.age = user_info.get('age', None)
-            self.memory.user.occupation = user_info.get('occupation', None)
-            self.memory.user.gender = user_info.get('gender', None)
-        
-        print(f"\n{'='*60}")
-        print(f"Starting {self.scale_name} Assessment")
-        print(f"User ID: {user_id}")
-        print(f"{'='*60}\n")
+    Responsibilities:
+    - Generate initial questions for each topic
+    - Generate follow-up questions to gather more information
+    """
     
-    def assess_topic(self, topic_config: dict, simulate_user: bool = True) -> int:
-        """Assess a single topic through multi-turn dialogue"""
-        topic_name = topic_config['name']
-        self.memory.add_topic_node(topic_name)
-        
-        print(f"\n--- Topic: {topic_name} ---")
-        
-        # Generate initial question (AGq)
-        question = self._agent_question_generator(topic_config, is_initial=True)
-        print(f"Agent: {question}")
-        
-        follow_up_count = 0
-        
-        while follow_up_count < self.max_follow_ups:
-            # Get user response
-            if simulate_user:
-                answer = self._simulate_user_response(topic_config, question, follow_up_count)
-            else:
-                answer = input("User: ")
-            
-            print(f"User: {answer}")
-            
-            # Store Q&A
-            self.memory.add_qa_pair(topic_name, question, answer)
-            
-            # Extract information and create statement node
-            statement = self._extract_information(answer)
-            self.memory.add_statement(topic_name, statement)
-            
-            # Evaluate response adequacy (AGev)
-            necessity_score = self._agent_evaluation(topic_config, topic_name)
-            
-            # Check if follow-up needed
-            if necessity_score < self.necessity_threshold:
-                print(f"[Evaluation: Adequate information collected]\n")
-                break
-            
-            # Generate follow-up question (AGq)
-            question = self._agent_question_generator(topic_config, is_initial=False)
-            print(f"\nAgent: {question}")
-            follow_up_count += 1
-        
-        # Score the topic (AGs)
-        score, summary, basis = self._agent_scoring(topic_config, topic_name)
-        self.memory.update_topic_score(topic_name, score, summary, basis)
-        
-        print(f"\n[Topic '{topic_name}' scored: {score}]")
-        print(f"Basis: {basis}\n")
-        
-        return score
+    def __init__(self, llm: LLMOrchestrator, config: Dict[str, Any]):
+        super().__init__(llm, config, "question_generator")
+        self.prompts = config['agent_prompts']['question_generator']
     
-    def _agent_question_generator(self, topic_config: dict, is_initial: bool) -> str:
-        """AGq: Question Generator Agent"""
-        prompt_template = self.config['agent_prompts']['question_generator']
+    def generate_initial_question(
+        self, 
+        topic_config: Dict[str, Any], 
+        memory: TreeMemory
+    ) -> str:
+        """
+        Generate initial question for a topic.
         
-        if is_initial:
-            prompt = prompt_template['initial'].format(
-                topic=topic_config['name'],
-                description=topic_config['description'],
-                context=self.memory.get_context_summary(topic_config['name'])
-            )
-        else:
-            prompt = prompt_template['followup'].format(
-                topic=topic_config['name'],
-                conversation=self.memory.get_current_topic_context(topic_config['name']),
-                context=self.memory.get_context_summary(topic_config['name'])
-            )
+        Args:
+            topic_config: Configuration for the current topic
+            memory: Tree-structured memory with conversation context
+            
+        Returns:
+            Generated question string
+        """
+        self.logger.info(f"Generating initial question for topic: {topic_config['name']}")
         
+        # Get context from memory
+        context = memory.get_context_summary(topic_config['name'])
+        
+        # Format prompt
+        prompt = self.prompts['initial'].format(
+            topic=topic_config['name'],
+            description=topic_config['description'],
+            context=context
+        )
+        
+        self.logger.debug(f"Prompt length: {len(prompt)} chars")
+        
+        # Generate question
         question = self.llm.generate(prompt)
-        self.q_logger.info(f"Generated question for topic {topic_config['name']}: {question}")
+        question = question.strip()
+        
+        self.logger.info(f"Generated initial question: {question}...")
+        
         return question
     
-    def _agent_evaluation(self, topic_config: dict, topic_name: str) -> float:
-        """AGev: Evaluation Agent - Returns necessity score (0-2)"""
-        prompt_template = self.config['agent_prompts']['evaluation']
+    def generate_followup_question(
+        self,
+        topic_config: Dict[str, Any],
+        topic_name: str,
+        memory: TreeMemory
+    ) -> str:
+        """
+        Generate follow-up question to gather more specific information.
         
-        prompt = prompt_template.format(
+        Args:
+            topic_config: Configuration for the current topic
+            topic_name: Name of the topic
+            memory: Tree-structured memory with conversation context
+            
+        Returns:
+            Generated follow-up question string
+        """
+        self.logger.info(f"Generating follow-up question for topic: {topic_name}")
+        
+        # Get current topic conversation
+        conversation = memory.get_current_topic_context(topic_name)
+        
+        # Get broader context
+        context = memory.get_context_summary(topic_name)
+        
+        # Format prompt
+        prompt = self.prompts['followup'].format(
             topic=topic_config['name'],
-            conversation=self.memory.get_current_topic_context(topic_name),
-            rating_criteria=json.dumps(topic_config['rating_criteria'], indent=2)
+            conversation=conversation,
+            context=context
         )
         
-        response = self.llm.generate(prompt)
-        self.eval_logger.info(f"Evaluation for topic {topic_name}: {response}")
+        self.logger.debug(f"Prompt length: {len(prompt)} chars")
         
-        # Parse necessity score from response
-        try:
-            # Extract number from response
-            for word in response.split():
-                if word.replace('.', '').isdigit():
-                    score = float(word)
-                    if 0 <= score <= 2:
-                        return score
-            return 1.0  # Default if parsing fails
-        except:
-            return 1.0
+        # Generate follow-up question
+        question = self.llm.generate(prompt)
+        question = question.strip()
+        
+        self.logger.info(f"Generated follow-up question: {question[:100]}...")
+        
+        return question
     
-    def _agent_scoring(self, topic_config: dict, topic_name: str) -> Tuple[int, str, str]:
-        """AGs: Scoring Agent"""
-        prompt_template = self.config['agent_prompts']['scoring']
+    def process(self, *args, **kwargs):
+        """Process wrapper for compatibility"""
+        question_type = kwargs.get('question_type', 'initial')
         
-        prompt = prompt_template.format(
+        if question_type == 'initial':
+            return self.generate_initial_question(
+                kwargs['topic_config'],
+                kwargs['memory']
+            )
+        else:
+            return self.generate_followup_question(
+                kwargs['topic_config'],
+                kwargs['topic_name'],
+                kwargs['memory']
+            )
+
+
+class EvaluationAgent(BaseAgent):
+    """
+    AGev: Evaluation Agent
+    
+    Responsibilities:
+    - Evaluate adequacy of user responses
+    - Determine if follow-up questions are needed
+    - Return necessity score (0-2)
+    """
+    
+    def __init__(self, llm: LLMOrchestrator, config: Dict[str, Any]):
+        super().__init__(llm, config, "evaluation")
+        self.prompt_template = config['agent_prompts']['evaluation']
+    
+    def evaluate_adequacy(
+        self,
+        topic_config: Dict[str, Any],
+        topic_name: str,
+        memory: TreeMemory
+    ) -> float:
+        """
+        Evaluate if user responses are adequate for scoring.
+        
+        Args:
+            topic_config: Configuration for the current topic
+            topic_name: Name of the topic
+            memory: Tree-structured memory with conversation context
+            
+        Returns:
+            Necessity score (0.0 = adequate, 1.0 = needs clarification, 2.0 = insufficient)
+        """
+        self.logger.info(f"Evaluating response adequacy for topic: {topic_name}")
+        
+        # Get current conversation
+        conversation = memory.get_current_topic_context(topic_name)
+        
+        # Format prompt
+        prompt = self.prompt_template.format(
             topic=topic_config['name'],
-            conversation=self.memory.get_current_topic_context(topic_name),
+            conversation=conversation,
             rating_criteria=json.dumps(topic_config['rating_criteria'], indent=2)
         )
         
-        response = self.llm.generate(prompt)
-        self.scoring_logger.info(f"Scoring for topic {topic_name}: {response}")
+        self.logger.debug(f"Prompt length: {len(prompt)} chars")
         
-        # Parse score, summary, and basis
+        # Generate evaluation
+        response = self.llm.generate(prompt)
+        
+        self.logger.debug(f"Evaluation response: {response[:200]}...")
+        
+        # Parse necessity score
+        necessity_score = self._parse_necessity_score(response)
+        
+        self.logger.info(f"Necessity score: {necessity_score}")
+        
+        return necessity_score
+    
+    def _parse_necessity_score(self, response: str) -> float:
+        """
+        Parse necessity score from LLM response.
+        
+        Args:
+            response: LLM response text
+            
+        Returns:
+            Necessity score (0.0, 1.0, or 2.0)
+        """
+        # Try to extract number from first line or first few words
+        lines = response.strip().split('\n')
+        first_line = lines[0] if lines else response
+        
+        # Look for score in first line
+        for word in first_line.split():
+            cleaned = word.strip('.:,;!?')
+            if cleaned.replace('.', '').isdigit():
+                score = float(cleaned)
+                if 0 <= score <= 2:
+                    self.logger.debug(f"Parsed necessity score: {score}")
+                    return score
+        
+        # Fallback: look in entire response
+        for word in response.split():
+            cleaned = word.strip('.:,;!?')
+            if cleaned.replace('.', '').isdigit():
+                score = float(cleaned)
+                if 0 <= score <= 2:
+                    self.logger.debug(f"Parsed necessity score (fallback): {score}")
+                    return score
+        
+        # Default to 1.0 if parsing fails
+        self.logger.warning("Failed to parse necessity score, defaulting to 1.0")
+        return 1.0
+    
+    def process(self, *args, **kwargs):
+        """Process wrapper for compatibility"""
+        return self.evaluate_adequacy(
+            kwargs['topic_config'],
+            kwargs['topic_name'],
+            kwargs['memory']
+        )
+
+
+class ScoringAgent(BaseAgent):
+    """
+    AGs: Scoring Agent
+    
+    Responsibilities:
+    - Analyze conversation history
+    - Assign quantitative scores based on rating criteria
+    - Generate summary and basis for the score
+    """
+    
+    def __init__(self, llm: LLMOrchestrator, config: Dict[str, Any]):
+        super().__init__(llm, config, "scoring")
+        self.prompt_template = config['agent_prompts']['scoring']
+    
+    def score_topic(
+        self,
+        topic_config: Dict[str, Any],
+        topic_name: str,
+        memory: TreeMemory
+    ) -> Tuple[int, str, str]:
+        """
+        Score a topic based on conversation history.
+        
+        Args:
+            topic_config: Configuration for the current topic
+            topic_name: Name of the topic
+            memory: Tree-structured memory with conversation context
+            
+        Returns:
+            Tuple of (score, summary, basis)
+        """
+        self.logger.info(f"Scoring topic: {topic_name}")
+        
+        # Get conversation history
+        conversation = memory.get_current_topic_context(topic_name)
+        
+        # Format prompt
+        prompt = self.prompt_template.format(
+            topic=topic_config['name'],
+            conversation=conversation,
+            rating_criteria=json.dumps(topic_config['rating_criteria'], indent=2)
+        )
+        
+        self.logger.debug(f"Prompt length: {len(prompt)} chars")
+        
+        # Generate score and explanation
+        response = self.llm.generate(prompt)
+        
+        self.logger.debug(f"Scoring response: {response[:300]}...")
+        
+        # Parse response
         score = self._parse_score(response, topic_config)
         summary = self._parse_summary(response)
-        basis = response  # Full response as basis
+        basis = self._parse_basis(response)
+        
+        self.logger.info(f"Topic '{topic_name}' scored: {score}")
+        self.logger.debug(f"Summary: {summary[:100]}...")
         
         return score, summary, basis
     
-    def _agent_updating(self, total_score: int) -> str:
-        """AGu: Updating Agent - Generate final report"""
-        prompt_template = self.config['agent_prompts']['updating']
+    def _parse_score(self, response: str, topic_config: Dict[str, Any]) -> int:
+        """
+        Parse score from LLM response.
         
-        # Compile all topic information
-        topics_summary = ""
-        for topic_name, topic_node in self.memory.topics.items():
-            topics_summary += f"\n{topic_name}:\n"
-            topics_summary += f"  Score: {topic_node.score}\n"
-            topics_summary += f"  Summary: {topic_node.summary}\n"
+        Args:
+            response: LLM response text
+            topic_config: Topic configuration with rating criteria
+            
+        Returns:
+            Score (0-3 or as defined in rating criteria)
+        """
+        # Look for "Score: X" pattern
+        if "Score:" in response or "score:" in response:
+            for line in response.split('\n'):
+                if 'score:' in line.lower():
+                    # Extract number after "Score:"
+                    parts = line.split(':')
+                    if len(parts) > 1:
+                        score_text = parts[1].strip()
+                        for word in score_text.split():
+                            cleaned = word.strip('.:,;!?')
+                            if cleaned.isdigit():
+                                score = int(cleaned)
+                                if score in topic_config['rating_criteria']:
+                                    self.logger.debug(f"Parsed score: {score}")
+                                    return score
         
-        prompt = prompt_template.format(
-            scale_name=self.scale_name,
-            topics_summary=topics_summary,
-            total_score=total_score,
-            user_info=json.dumps(self.memory.user.to_dict(), indent=2)
-        )
+        # Fallback: look for first number in valid range
+        for word in response.split():
+            cleaned = word.strip('.:,;!?')
+            if cleaned.isdigit():
+                score = int(cleaned)
+                if score in topic_config['rating_criteria']:
+                    self.logger.debug(f"Parsed score (fallback): {score}")
+                    return score
         
-        report = self.llm.generate(prompt)
-        self.updating_logger.info(f"Generated final report: {report}")
-        return report
-    
-    def _extract_information(self, answer: str) -> StatementNode:
-        """Extract key information from user answer"""
-        # Simple keyword-based extraction (can be enhanced with LLM)
-        statement = StatementNode()
-        
-        answer_lower = answer.lower()
-        
-        # Emotion keywords
-        if any(word in answer_lower for word in ['sad', 'depressed', 'down', 'hopeless']):
-            statement.emotion = "negative"
-        elif any(word in answer_lower for word in ['anxious', 'worried', 'nervous']):
-            statement.emotion = "anxious"
-        
-        # Frequency keywords
-        if any(word in answer_lower for word in ['always', 'constantly', 'every day']):
-            statement.frequency = "high"
-        elif any(word in answer_lower for word in ['often', 'frequently', 'regularly']):
-            statement.frequency = "medium"
-        elif any(word in answer_lower for word in ['sometimes', 'occasionally']):
-            statement.frequency = "low"
-        
-        # Duration keywords
-        if any(word in answer_lower for word in ['weeks', 'months', 'long time']):
-            statement.duration = "extended"
-        elif any(word in answer_lower for word in ['days', 'recently']):
-            statement.duration = "short"
-        
-        # Impact keywords
-        if any(word in answer_lower for word in ['difficult', 'hard', 'struggle', 'affect']):
-            statement.impact = "significant"
-        
-        return statement
-    
-    def _parse_score(self, response: str, topic_config: dict) -> int:
-        """Parse score from agent response"""
-        # Look for score in response
-        for i in range(len(topic_config['rating_criteria'])):
-            if str(i) in response[:50]:  # Check first 50 chars
-                return i
+        # Default to 0 if parsing fails
+        self.logger.warning("Failed to parse score, defaulting to 0")
         return 0
     
     def _parse_summary(self, response: str) -> str:
-        """Parse summary from response"""
-        # Take first 200 chars as summary
-        return response[:200].strip()
+        """
+        Parse summary from LLM response.
+        
+        Args:
+            response: LLM response text
+            
+        Returns:
+            Summary string
+        """
+        # Look for "Summary:" section
+        if "Summary:" in response or "summary:" in response:
+            for i, line in enumerate(response.split('\n')):
+                if 'summary:' in line.lower():
+                    # Get text after "Summary:"
+                    summary_text = line.split(':', 1)[1].strip()
+                    
+                    # If empty, try next line
+                    if not summary_text and i + 1 < len(response.split('\n')):
+                        summary_text = response.split('\n')[i + 1].strip()
+                    
+                    self.logger.debug(f"Parsed summary: {summary_text[:100]}...")
+                    return summary_text
+        
+        # Fallback: use first 200 chars
+        summary = response[:200].strip()
+        self.logger.debug(f"Parsed summary (fallback): {summary[:100]}...")
+        return summary
     
-    def _simulate_user_response(self, topic_config: dict, question: str, turn: int) -> str:
-        """Simulate user responses for demonstration"""
-        # Simple simulation based on topic and turn
-        responses = {
-            0: [
-                "Yes, I've been experiencing that.",
-                "I have noticed some issues with this.",
-                "It's been affecting me recently."
-            ],
-            1: [
-                "It happens quite often, maybe several times a week.",
-                "Fairly frequently, it's hard to manage.",
-                "More than I'd like, it's becoming a concern."
-            ],
-            2: [
-                "It really impacts my daily life and work performance.",
-                "Yes, it makes things difficult and exhausting.",
-                "It's been making everything harder to handle."
-            ]
-        }
+    def _parse_basis(self, response: str) -> str:
+        """
+        Parse basis/explanation from LLM response.
         
-        import random
-        return random.choice(responses.get(turn, ["I'm not sure how to describe it further."]))
+        Args:
+            response: LLM response text
+            
+        Returns:
+            Basis string
+        """
+        # Look for "Basis:" section
+        if "Basis:" in response or "basis:" in response:
+            for i, line in enumerate(response.split('\n')):
+                if 'basis:' in line.lower():
+                    # Get everything after "Basis:"
+                    remaining_lines = response.split('\n')[i:]
+                    basis_text = '\n'.join(remaining_lines)
+                    basis_text = basis_text.split(':', 1)[1].strip()
+                    
+                    self.logger.debug(f"Parsed basis: {basis_text[:100]}...")
+                    return basis_text
+        
+        # Fallback: use entire response
+        self.logger.debug(f"Using entire response as basis")
+        return response
     
-    def run_full_assessment(self, user_id: str, user_info: dict = None, simulate: bool = True):
-        """Run complete assessment across all topics"""
-        self.start_assessment(user_id, user_info)
+    def process(self, *args, **kwargs):
+        """Process wrapper for compatibility"""
+        return self.score_topic(
+            kwargs['topic_config'],
+            kwargs['topic_name'],
+            kwargs['memory']
+        )
+
+
+class UpdatingAgent(BaseAgent):
+    """
+    AGu: Updating Agent
+    
+    Responsibilities:
+    - Aggregate all topic scores
+    - Generate comprehensive final report
+    - Provide recommendations
+    """
+    
+    def __init__(self, llm: LLMOrchestrator, config: Dict[str, Any]):
+        super().__init__(llm, config, "updating")
+        self.prompt_template = config['agent_prompts']['updating']
+    
+    def generate_report(
+        self,
+        memory: TreeMemory,
+        total_score: int,
+        scale_name: str
+    ) -> str:
+        """
+        Generate comprehensive final assessment report.
         
-        total_score = 0
+        Args:
+            memory: Tree-structured memory with all conversation data
+            total_score: Total assessment score
+            scale_name: Name of the assessment scale
+            
+        Returns:
+            Final report string
+        """
+        self.logger.info(f"Generating final report for user: {memory.user.user_id}")
         
-        # Assess each topic
-        for topic_config in self.topics:
-            score = self.assess_topic(topic_config, simulate_user=simulate)
-            total_score += score
+        # Compile topics summary
+        topics_summary = self._compile_topics_summary(memory)
         
-        # Generate final report (AGu)
-        print(f"\n{'='*60}")
-        print(f"ASSESSMENT COMPLETE")
-        print(f"{'='*60}")
-        print(f"Total Score: {total_score}")
+        # Format prompt
+        prompt = self.prompt_template.format(
+            scale_name=scale_name,
+            topics_summary=topics_summary,
+            total_score=total_score,
+            user_info=json.dumps(memory.user.to_dict(), indent=2)
+        )
         
-        # Determine classification
-        threshold = self.scale.get('threshold', 10)
-        classification = "Depression" if total_score >= threshold else "No Depression"
-        print(f"Classification: {classification}\n")
+        self.logger.debug(f"Prompt length: {len(prompt)} chars")
         
-        final_report = self._agent_updating(total_score)
-        print("Final Report:")
-        print(final_report)
+        # Generate report
+        report = self.llm.generate(prompt, max_tokens=2048)
         
-        return {
-            'total_score': total_score,
-            'classification': classification,
-            'topics': {name: node.to_dict() for name, node in self.memory.topics.items()},
-            'report': final_report
-        }
+        self.logger.info(f"Final report generated (length: {len(report)} chars)")
+        self.logger.debug(f"Report preview: {report[:200]}...")
+        
+        return report
+    
+    def _compile_topics_summary(self, memory: TreeMemory) -> str:
+        """
+        Compile summary of all assessed topics.
+        
+        Args:
+            memory: Tree-structured memory
+            
+        Returns:
+            Formatted topics summary string
+        """
+        self.logger.debug("Compiling topics summary")
+        
+        summary = ""
+        for topic_name, topic_node in memory.topics.items():
+            summary += f"\n{topic_name}:\n"
+            summary += f"  Score: {topic_node.score}\n"
+            summary += f"  Summary: {topic_node.summary}\n"
+            if topic_node.basis:
+                summary += f"  Basis: {topic_node.basis[:200]}...\n"
+        
+        self.logger.debug(f"Topics summary compiled ({len(summary)} chars)")
+        
+        return summary
+    
+    def process(self, *args, **kwargs):
+        """Process wrapper for compatibility"""
+        return self.generate_report(
+            kwargs['memory'],
+            kwargs['total_score'],
+            kwargs['scale_name']
+        )
