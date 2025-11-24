@@ -1,329 +1,519 @@
 """
-AgentMental Framework - Main Entry Point
+PsycheCompass - Main Orchestrator
 
-This module provides the main interface for running mental health assessments
-using the multi-agent framework with AutoGen.
+This is the main entry point that connects:
+1. Assessment Pipeline (PHQ-8 mental health assessment)
+2. Therapeutic Pipeline (Risk-based therapeutic support)
+
+Clean modular architecture for research and production use.
 """
 
 import yaml
 import json
 import os
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
-from utils.logger import setup_logger
-from utils.memory import TreeMemory
+from utils.logger import setup_logger, log_session_start, log_session_end
 from utils.llm import LLMOrchestrator
-from utils.agents import (
-    QuestionGeneratorAgent,
-    EvaluationAgent,
-    ScoringAgent,
-    UpdatingAgent
-)
+
+# Import pipelines
+from pipelines.assessment_pipeline import AssessmentPipeline
+from pipelines.therapeutic_pipeline import TherapeuticPipeline
 
 # Setup logger
-logger = setup_logger('main', 'logs/main.log')
+logger = setup_logger('psychecompass', 'logs/psychecompass.log')
 
 
-class AgentMental:
-    """Main multi-agent framework for mental health assessment"""
+class PsycheCompass:
+    """
+    PsycheCompass - Adaptive Multi-Agent Mental Health System
+    
+    Main orchestrator that coordinates:
+    - Assessment subsystem (PHQ-8 screening)
+    - Therapeutic subsystem (Risk-based support)
+    - Clinical validation (Safety checks)
+    
+    This implements the architecture from the research paper:
+    "PsycheCompass: An Adaptive Multi-Agent system for Mental Health 
+     Assessment & Therapeutic Support"
+    """
     
     def __init__(self, config_path: str = "config.yml"):
-        logger.info("Initializing AgentMental framework")
+        """
+        Initialize PsycheCompass system
+        
+        Args:
+            config_path: Path to configuration file
+        """
+        logger.info("="*70)
+        logger.info("INITIALIZING PSYCHECOMPASS")
+        logger.info("Adaptive Multi-Agent Mental Health System")
+        logger.info("="*70)
         
         # Load configuration
+        logger.info(f"Loading configuration from: {config_path}")
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
         
-        logger.info(f"Configuration loaded from {config_path}")
-        
         # Initialize LLM Orchestrator
+        logger.info("Initializing LLM Orchestrator...")
         self.llm = LLMOrchestrator(self.config)
         
-        # Load assessment scale
-        self.scale = self.config['assessment_scale']
-        self.scale_name = self.scale['name']
-        self.topics = self.scale['topics']
+        # Test LLM connection
+        if self.llm.test_connection():
+            logger.info("✓ LLM connection successful")
+        else:
+            logger.warning("⚠ LLM connection test failed")
         
-        # Agent parameters
-        self.max_follow_ups = self.config['agent_params']['max_follow_ups']
-        self.necessity_threshold = self.config['agent_params']['necessity_threshold']
+        # Initialize pipelines
+        logger.info("\nInitializing subsystems...")
+        self._initialize_pipelines()
         
-        # Initialize agents
-        logger.info("Initializing agents")
-        self._initialize_agents()
+        # Session tracking
+        self.current_session_id: Optional[str] = None
+        self.sessions: Dict[str, Dict] = {}
         
-        # Memory
-        self.memory: Optional[TreeMemory] = None
-        
-        logger.info("AgentMental framework initialized successfully")
+        logger.info("="*70)
+        logger.info("✓ PSYCHECOMPASS INITIALIZED SUCCESSFULLY")
+        logger.info("="*70)
     
-    def _initialize_agents(self):
-        """Initialize all four agents"""
-        self.question_agent = QuestionGeneratorAgent(
+    def _initialize_pipelines(self):
+        """Initialize both assessment and therapeutic pipelines"""
+        
+        # Assessment Pipeline
+        logger.info("→ Initializing Assessment Pipeline...")
+        self.assessment_pipeline = AssessmentPipeline(
             llm=self.llm,
             config=self.config
         )
+        logger.info("  ✓ Assessment Pipeline ready")
         
-        self.evaluation_agent = EvaluationAgent(
+        # Therapeutic Pipeline
+        logger.info("→ Initializing Therapeutic Pipeline...")
+        self.therapeutic_pipeline = TherapeuticPipeline(
             llm=self.llm,
             config=self.config
         )
-        
-        self.scoring_agent = ScoringAgent(
-            llm=self.llm,
-            config=self.config
-        )
-        
-        self.updating_agent = UpdatingAgent(
-            llm=self.llm,
-            config=self.config
-        )
-        
-        logger.info("All agents initialized")
+        logger.info("  ✓ Therapeutic Pipeline ready")
     
-    def start_assessment(self, user_id: str, user_info: dict = None):
-        """Start a new assessment session"""
-        logger.info(f"Starting assessment for user: {user_id}")
-        
-        self.memory = TreeMemory(user_id)
-        
-        if user_info:
-            self.memory.user.age = user_info.get('age')
-            self.memory.user.occupation = user_info.get('occupation')
-            self.memory.user.gender = user_info.get('gender')
-            logger.info(f"User info set: {user_info}")
-        
-        print(f"\n{'='*60}")
-        print(f"Starting {self.scale_name} Assessment")
-        print(f"User ID: {user_id}")
-        print(f"{'='*60}\n")
-    
-    def assess_topic(self, topic_config: dict, simulate_user: bool = True) -> int:
-        """Assess a single topic through multi-turn dialogue"""
-        topic_name = topic_config['name']
-        logger.info(f"Starting assessment for topic: {topic_name}")
-        
-        self.memory.add_topic_node(topic_name)
-        
-        print(f"\n--- Topic: {topic_name} ---")
-        
-        # Generate initial question using QuestionGeneratorAgent
-        logger.info(f"Generating initial question for {topic_name}")
-        question = self.question_agent.generate_initial_question(
-            topic_config=topic_config,
-            memory=self.memory
-        )
-        
-        print(f"Agent: {question}")
-        
-        follow_up_count = 0
-        
-        while follow_up_count < self.max_follow_ups:
-            # Get user response
-            if simulate_user:
-                answer = self._simulate_user_response(topic_config, question, follow_up_count)
-            else:
-                answer = input("User: ")
-            
-            print(f"User: {answer}")
-            logger.info(f"User response received (follow-up {follow_up_count})")
-            
-            # Store Q&A in memory
-            self.memory.add_qa_pair(topic_name, question, answer)
-            
-            # Extract information and create statement node
-            statement = self.memory.extract_information(answer)
-            self.memory.add_statement(topic_name, statement)
-            logger.info(f"Statement extracted and stored: {statement.to_dict()}")
-            
-            # Evaluate response adequacy using EvaluationAgent
-            logger.info(f"Evaluating response adequacy for {topic_name}")
-            necessity_score = self.evaluation_agent.evaluate_adequacy(
-                topic_config=topic_config,
-                topic_name=topic_name,
-                memory=self.memory
-            )
-            
-            logger.info(f"Necessity score: {necessity_score}")
-            
-            # Check if follow-up needed
-            if necessity_score < self.necessity_threshold:
-                print(f"[Evaluation: Adequate information collected]\n")
-                logger.info(f"Adequate information collected for {topic_name}")
-                break
-            
-            follow_up_count += 1
-            
-            # Check if we've reached max follow-ups
-            if follow_up_count >= self.max_follow_ups:
-                logger.info(f"Max follow-ups reached for {topic_name}")
-                break
-            
-            # Generate follow-up question using QuestionGeneratorAgent
-            logger.info(f"Generating follow-up question {follow_up_count} for {topic_name}")
-            question = self.question_agent.generate_followup_question(
-                topic_config=topic_config,
-                topic_name=topic_name,
-                memory=self.memory
-            )
-            
-            print(f"\nAgent: {question}")
-        
-        # Score the topic using ScoringAgent
-        logger.info(f"Scoring topic: {topic_name}")
-        score, summary, basis = self.scoring_agent.score_topic(
-            topic_config=topic_config,
-            topic_name=topic_name,
-            memory=self.memory
-        )
-        
-        self.memory.update_topic_score(topic_name, score, summary, basis)
-        logger.info(f"Topic '{topic_name}' scored: {score}")
-        
-        print(f"\n[Topic '{topic_name}' scored: {score}]")
-        print(f"Basis: {basis[:150]}...\n")
-        
-        return score
-    
-    def _simulate_user_response(self, topic_config: dict, question: str, turn: int) -> str:
-        """Simulate user responses for demonstration"""
-        logger.debug(f"Simulating user response for turn {turn}")
-        
-        # Simple simulation based on topic and turn
-        responses = {
-            0: [
-                "Yes, I've been experiencing that.",
-                "I have noticed some issues with this.",
-                "It's been affecting me recently."
-            ],
-            1: [
-                "It happens quite often, maybe several times a week.",
-                "Fairly frequently, it's hard to manage.",
-                "More than I'd like, it's becoming a concern."
-            ],
-            2: [
-                "It really impacts my daily life and work performance.",
-                "Yes, it makes things difficult and exhausting.",
-                "It's been making everything harder to handle."
-            ]
-        }
-        
-        import random
-        return random.choice(responses.get(turn, ["I'm not sure how to describe it further."]))
-    
-    def run_full_assessment(
-        self, 
-        user_id: str, 
-        user_info: dict = None, 
-        simulate: bool = True
+    def run_full_session(
+        self,
+        user_id: str,
+        user_info: Optional[Dict] = None,
+        user_response_fn: Optional[callable] = None,
+        interactive: bool = False
     ) -> Dict:
-        """Run complete assessment across all topics"""
-        logger.info(f"Starting full assessment for user {user_id}")
+        """
+        Run complete end-to-end session:
+        1. PHQ-8 Assessment
+        2. Therapeutic Response
+        3. (Optional) Multi-turn conversation
         
-        self.start_assessment(user_id, user_info)
+        Args:
+            user_id: Unique user identifier
+            user_info: Optional user information
+            user_response_fn: Function to get user responses for assessment
+            interactive: If True, allows multi-turn conversation
+            
+        Returns:
+            Complete session results
+        """
+        # Generate session ID
+        session_id = f"{user_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        self.current_session_id = session_id
         
-        total_score = 0
+        log_session_start(logger, session_id)
         
-        # Assess each topic
-        for i, topic_config in enumerate(self.topics, 1):
-            logger.info(f"Assessing topic {i}/{len(self.topics)}: {topic_config['name']}")
-            score = self.assess_topic(topic_config, simulate_user=simulate)
-            total_score += score
+        logger.info("="*70)
+        logger.info("STARTING FULL SESSION")
+        logger.info(f"Session ID: {session_id}")
+        logger.info(f"User ID: {user_id}")
+        logger.info("="*70)
         
-        # Generate final report using UpdatingAgent
-        logger.info("Generating final report")
-        print(f"\n{'='*60}")
-        print(f"ASSESSMENT COMPLETE")
-        print(f"{'='*60}")
-        print(f"Total Score: {total_score}")
+        # =====================================================================
+        # PHASE 1: ASSESSMENT
+        # =====================================================================
+        logger.info("\n" + "="*70)
+        logger.info("PHASE 1: MENTAL HEALTH ASSESSMENT")
+        logger.info("="*70)
         
-        # Determine classification
-        threshold = self.scale.get('threshold', 10)
-        classification = "Depression" if total_score >= threshold else "No Depression"
-        print(f"Classification: {classification}\n")
-        
-        logger.info(f"Assessment complete. Total score: {total_score}, Classification: {classification}")
-        
-        final_report = self.updating_agent.generate_report(
-            memory=self.memory,
-            total_score=total_score,
-            scale_name=self.scale_name
+        assessment_results = self.assessment_pipeline.run_full_assessment(
+            user_id=user_id,
+            user_info=user_info,
+            user_response_fn=user_response_fn
         )
         
-        print("Final Report:")
-        print(final_report)
+        logger.info("\n✓ Assessment Phase Complete")
+        logger.info(f"  Total Score: {assessment_results['total_score']}")
+        logger.info(f"  Classification: {assessment_results['classification']}")
+        logger.info(f"  Crisis Indicators: {len(assessment_results['crisis_indicators'])}")
         
-        results = {
+        # Generate assessment report
+        assessment_report = self.assessment_pipeline.generate_assessment_report(
+            assessment_results
+        )
+        
+        # =====================================================================
+        # PHASE 2: THERAPEUTIC RESPONSE
+        # =====================================================================
+        logger.info("\n" + "="*70)
+        logger.info("PHASE 2: THERAPEUTIC SUPPORT")
+        logger.info("="*70)
+        
+        therapeutic_result = self.therapeutic_pipeline.generate_response(
+            assessment_results=assessment_results
+        )
+        
+        logger.info("\n✓ Therapeutic Phase Complete")
+        logger.info(f"  Agent Type: {therapeutic_result['agent_type']}")
+        logger.info(f"  Risk Level: {therapeutic_result['risk_level']}")
+        
+        # =====================================================================
+        # PHASE 3: INTERACTIVE CONVERSATION (Optional)
+        # =====================================================================
+        conversation_history = []
+        
+        if interactive:
+            logger.info("\n" + "="*70)
+            logger.info("PHASE 3: INTERACTIVE CONVERSATION")
+            logger.info("="*70)
+            
+            conversation_history = self._interactive_conversation(
+                assessment_results,
+                therapeutic_result
+            )
+        
+        # =====================================================================
+        # COMPILE COMPLETE SESSION RESULTS
+        # =====================================================================
+        session_results = {
+            'session_id': session_id,
             'user_id': user_id,
-            'total_score': total_score,
-            'classification': classification,
-            'topics': {name: node.to_dict() for name, node in self.memory.topics.items()},
-            'report': final_report,
-            'timestamp': datetime.now().isoformat()
+            'user_info': user_info or {},
+            'timestamp': datetime.now().isoformat(),
+            
+            # Assessment results
+            'assessment': {
+                'total_score': assessment_results['total_score'],
+                'classification': assessment_results['classification'],
+                'crisis_indicators': assessment_results['crisis_indicators'],
+                'topics': assessment_results['topics'],
+                'report': assessment_report
+            },
+            
+            # Therapeutic results
+            'therapeutic': {
+                'agent_type': therapeutic_result['agent_type'],
+                'risk_level': therapeutic_result['risk_level'],
+                'response': therapeutic_result['response'],
+                'routing_explanation': therapeutic_result['routing_explanation']
+            },
+            
+            # Conversation history (if interactive)
+            'conversation_history': conversation_history,
+            
+            # Full details
+            'full_assessment_results': assessment_results,
+            'full_therapeutic_result': therapeutic_result
         }
         
-        logger.info("Full assessment completed successfully")
+        # Store session
+        self.sessions[session_id] = session_results
         
-        # Save results if configured
+        # Save results
         if self.config.get('output', {}).get('save_results', False):
-            self._save_results(results)
+            self._save_session(session_results)
         
-        return results
+        log_session_end(logger, session_id, "completed")
+        
+        return session_results
     
-    def _save_results(self, results: Dict):
-        """Save assessment results to file"""
-        output_dir = self.config.get('output', {}).get('output_directory', './assessments')
+    def run_assessment_only(
+        self,
+        user_id: str,
+        user_info: Optional[Dict] = None,
+        user_response_fn: Optional[callable] = None
+    ) -> Dict:
+        """
+        Run only the assessment phase (no therapeutic response)
+        
+        Useful for:
+        - Research evaluation of assessment subsystem
+        - Batch processing
+        - Data collection
+        
+        Args:
+            user_id: Unique user identifier
+            user_info: Optional user information
+            user_response_fn: Function to get user responses
+            
+        Returns:
+            Assessment results
+        """
+        logger.info("Running assessment-only mode")
+        
+        assessment_results = self.assessment_pipeline.run_full_assessment(
+            user_id=user_id,
+            user_info=user_info,
+            user_response_fn=user_response_fn
+        )
+        
+        # Generate report
+        assessment_report = self.assessment_pipeline.generate_assessment_report(
+            assessment_results
+        )
+        
+        assessment_results['report'] = assessment_report
+        
+        return assessment_results
+    
+    def run_therapeutic_only(self, assessment_results: Dict) -> Dict:
+        """
+        Run only therapeutic response (given assessment results)
+        
+        Useful for:
+        - Testing therapeutic agents
+        - Trying different therapeutic approaches
+        - Research evaluation
+        
+        Args:
+            assessment_results: Pre-existing assessment results
+            
+        Returns:
+            Therapeutic results
+        """
+        logger.info("Running therapeutic-only mode")
+        
+        therapeutic_result = self.therapeutic_pipeline.generate_response(
+            assessment_results=assessment_results
+        )
+        
+        return therapeutic_result
+    
+    def continue_conversation(
+        self,
+        session_id: str,
+        user_message: str
+    ) -> Dict:
+        """
+        Continue an existing therapeutic conversation
+        
+        Args:
+            session_id: Session ID to continue
+            user_message: User's message
+            
+        Returns:
+            Therapeutic response
+        """
+        if session_id not in self.sessions:
+            raise ValueError(f"Session {session_id} not found")
+        
+        session = self.sessions[session_id]
+        assessment_results = session['full_assessment_results']
+        
+        # Get response from therapeutic pipeline
+        response = self.therapeutic_pipeline.continue_conversation(
+            user_message=user_message,
+            assessment_results=assessment_results
+        )
+        
+        # Update session history
+        if 'conversation_history' not in session:
+            session['conversation_history'] = []
+        
+        session['conversation_history'].append({
+            'turn': len(session['conversation_history']) + 1,
+            'user_message': user_message,
+            'agent_response': response['response'],
+            'agent_type': response['agent_type'],
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        return response
+    
+    def _interactive_conversation(
+        self,
+        assessment_results: Dict,
+        initial_therapeutic_result: Dict
+    ) -> List[Dict]:
+        """
+        Run interactive multi-turn conversation
+        
+        Args:
+            assessment_results: Assessment results
+            initial_therapeutic_result: Initial therapeutic response
+            
+        Returns:
+            Conversation history
+        """
+        logger.info("Starting interactive conversation mode")
+        print("\n" + "="*70)
+        print("INTERACTIVE CONVERSATION MODE")
+        print("Type 'exit' to end conversation")
+        print("="*70 + "\n")
+        
+        conversation_history = []
+        
+        # Show initial therapeutic response
+        print(f"Agent: {initial_therapeutic_result['response']}\n")
+        
+        turn = 0
+        max_turns = 10
+        
+        while turn < max_turns:
+            turn += 1
+            
+            # Get user input
+            user_message = input(f"\nYou (turn {turn}): ").strip()
+            
+            if user_message.lower() in ['exit', 'quit', 'bye']:
+                logger.info("User ended conversation")
+                print("\nThank you for the conversation. Take care!")
+                break
+            
+            if not user_message:
+                continue
+            
+            # Get therapeutic response
+            response = self.therapeutic_pipeline.continue_conversation(
+                user_message=user_message,
+                assessment_results=assessment_results
+            )
+            
+            print(f"\nAgent ({response['agent_type']}): {response['response']}\n")
+            
+            # Store in history
+            conversation_history.append({
+                'turn': turn,
+                'user_message': user_message,
+                'agent_response': response['response'],
+                'agent_type': response['agent_type'],
+                'timestamp': datetime.now().isoformat()
+            })
+        
+        logger.info(f"Interactive conversation ended after {turn} turns")
+        
+        return conversation_history
+    
+    def _save_session(self, session_results: Dict):
+        """Save complete session results"""
+        # Save assessment results
+        if self.config.get('output', {}).get('save_results', True):
+            output_dir = self.config.get('output', {}).get('output_directory', './assessments')
+            self.assessment_pipeline.save_results(
+                session_results['full_assessment_results'],
+                output_dir
+            )
+        
+        # Save therapeutic session
+        if self.config.get('output', {}).get('save_therapeutic_sessions', True):
+            self.therapeutic_pipeline.save_session()
+        
+        # Save complete session
+        output_dir = './sessions'
         os.makedirs(output_dir, exist_ok=True)
         
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{output_dir}/assessment_{results['user_id']}_{timestamp}.json"
+        filename = f"{output_dir}/session_{session_results['session_id']}.json"
         
         try:
             with open(filename, 'w') as f:
-                json.dump(results, f, indent=2, default=str)
-            logger.info(f"Results saved to {filename}")
-            print(f"\n✓ Results saved to: {filename}")
+                json.dump(session_results, f, indent=2, default=str)
+            logger.info(f"✓ Complete session saved to: {filename}")
         except Exception as e:
-            logger.error(f"Failed to save results: {e}")
-            print(f"\n✗ Failed to save results: {e}")
+            logger.error(f"✗ Failed to save session: {e}")
+    
+    def display_session_summary(self, session_results: Dict):
+        """Display formatted session summary"""
+        print("\n" + "="*70)
+        print("SESSION SUMMARY")
+        print("="*70)
+        print(f"Session ID: {session_results['session_id']}")
+        print(f"User ID: {session_results['user_id']}")
+        print(f"Timestamp: {session_results['timestamp']}")
+        
+        print("\n" + "-"*70)
+        print("ASSESSMENT RESULTS")
+        print("-"*70)
+        print(f"PHQ-8 Score: {session_results['assessment']['total_score']}/24")
+        print(f"Classification: {session_results['assessment']['classification']}")
+        print(f"Crisis Indicators: {len(session_results['assessment']['crisis_indicators'])}")
+        
+        print("\n" + "-"*70)
+        print("THERAPEUTIC SUPPORT")
+        print("-"*70)
+        print(f"Agent Type: {session_results['therapeutic']['agent_type'].upper()}")
+        print(f"Risk Level: {session_results['therapeutic']['risk_level'].upper()}")
+        
+        print("\n" + "-"*70)
+        print("ASSESSMENT REPORT")
+        print("-"*70)
+        print(session_results['assessment']['report'])
+        
+        print("\n" + "-"*70)
+        print("THERAPEUTIC RESPONSE")
+        print("-"*70)
+        print(session_results['therapeutic']['response'])
+        
+        if session_results['conversation_history']:
+            print("\n" + "-"*70)
+            print(f"CONVERSATION: {len(session_results['conversation_history'])} turns")
+            print("-"*70)
+        
+        print("="*70 + "\n")
+    
+    def get_system_info(self) -> Dict:
+        """Get system information and configuration"""
+        return {
+            'system': 'PsycheCompass',
+            'version': '1.0.0',
+            'llm_provider': self.llm.provider.value,
+            'llm_model': self.llm.model_name,
+            'assessment_scale': self.config['assessment_scale']['name'],
+            'therapeutic_enabled': self.config.get('therapeutic_support', {}).get('enabled', True),
+            'active_sessions': len(self.sessions)
+        }
 
 
 def main():
-    """Main entry point"""
-    logger.info("="*60)
-    logger.info("AgentMental Framework Starting")
-    logger.info("="*60)
+    """Example usage of PsycheCompass"""
+    print("\n" + "="*70)
+    print("PSYCHECOMPASS - Adaptive Multi-Agent Mental Health System")
+    print("="*70 + "\n")
     
-    try:
-        # Initialize the framework
-        agent_mental = AgentMental("config.yml")
-        
-        # Run assessment with simulated user
-        user_info = {
-            'age': 35,
-            'occupation': 'Software Engineer',
-            'gender': 'Male'
-        }
-        
-        results = agent_mental.run_full_assessment(
-            user_id="user_001",
-            user_info=user_info,
-            simulate=True
-        )
-        
-        print("\n" + "="*60)
-        print("Assessment Results Summary:")
-        print(f"User ID: {results['user_id']}")
-        print(f"Total Score: {results['total_score']}")
-        print(f"Classification: {results['classification']}")
-        print("="*60)
-        
-        logger.info("AgentMental Framework completed successfully")
-        
-    except Exception as e:
-        logger.error(f"Error in main execution: {e}", exc_info=True)
-        raise
+    # Initialize system
+    psyche = PsycheCompass("config.yml")
+    
+    # Display system info
+    info = psyche.get_system_info()
+    print(f"System: {info['system']} v{info['version']}")
+    print(f"LLM: {info['llm_model']} ({info['llm_provider']})")
+    print(f"Assessment: {info['assessment_scale']}")
+    print(f"Therapeutic Support: {'Enabled' if info['therapeutic_enabled'] else 'Disabled'}")
+    print()
+    
+    # User information
+    user_info = {
+        'age': 28,
+        'occupation': 'Software Engineer',
+        'gender': 'Male'
+    }
+    
+    # Run full session with simulated user
+    print("Running full session with simulated user...\n")
+    
+    session_results = psyche.run_full_session(
+        user_id="demo_user_001",
+        user_info=user_info,
+        user_response_fn=None,  # Uses simulator
+        interactive=False  # Set to True for interactive mode
+    )
+    
+    # Display results
+    psyche.display_session_summary(session_results)
+    
+    print("\n✓ Session complete!")
+    print(f"✓ Results saved to ./sessions/ and ./assessments/")
 
 
 if __name__ == "__main__":
