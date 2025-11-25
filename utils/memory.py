@@ -1,10 +1,3 @@
-"""
-Memory Management Module
-
-Implements tree-structured memory for maintaining conversation context
-and reducing redundant questioning.
-"""
-
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 from utils.logger import setup_logger

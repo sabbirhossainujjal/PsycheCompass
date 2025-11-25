@@ -1,9 +1,3 @@
-"""
-Updating Agent
-
-Aggregates all topic scores and generates comprehensive final assessment report.
-"""
-
 import json
 from typing import Dict, Any
 from abc import ABC, abstractmethod

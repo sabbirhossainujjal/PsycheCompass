@@ -1,16 +1,3 @@
-"""
-Assessment Pipeline
-
-Orchestrates the assessment subsystem agents:
-- Question Generator Agent
-- Evaluation Agent
-- Scoring Agent
-- Memory Updater Agent
-
-This module provides a clean interface for running PHQ-8 assessments
-and can be used independently or as part of the full system.
-"""
-
 import json
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
@@ -18,12 +5,11 @@ from datetime import datetime
 from utils.logger import setup_logger
 from utils.memory import TreeMemory
 from utils.llm import LLMOrchestrator
-from utils.agents import (
-    QuestionGeneratorAgent,
-    EvaluationAgent,
-    ScoringAgent,
-    UpdatingAgent
-)
+from agents.assessment.question_generator import QuestionGeneratorAgent
+from agents.assessment.evaluation_agent import EvaluationAgent
+from agents.assessment.scoring_agent import ScoringAgent
+from agents.assessment.updating_agent import UpdatingAgent
+
 
 logger = setup_logger('assessment_pipeline', 'logs/assessment_pipeline.log')
 
@@ -41,13 +27,6 @@ class AssessmentPipeline:
     """
 
     def __init__(self, llm: LLMOrchestrator, config: Dict):
-        """
-        Initialize assessment pipeline
-
-        Args:
-            llm: LLM orchestrator instance
-            config: Configuration dictionary
-        """
         logger.info("="*70)
         logger.info("Initializing Assessment Pipeline")
         logger.info("="*70)
@@ -55,22 +34,20 @@ class AssessmentPipeline:
         self.llm = llm
         self.config = config
 
-        # Load assessment scale configuration
+        # Load configuration
         self.scale = config['assessment_scale']
         self.scale_name = self.scale['name']
         self.topics = self.scale['topics']
 
-        # Load agent parameters
         agent_params = config['agent_params']
         self.max_follow_ups = agent_params['max_follow_ups']
         self.necessity_threshold = agent_params['necessity_threshold']
 
-        # Initialize agents
         logger.info("Initializing assessment agents...")
         self._initialize_agents()
 
-        # Memory will be created per session
-        self.memory: Optional[TreeMemory] = None
+        
+        self.memory: Optional[TreeMemory] = None # Memory for each session
 
         logger.info(f"Assessment Pipeline initialized successfully")
         logger.info(f"Scale: {self.scale_name}")
@@ -100,7 +77,7 @@ class AssessmentPipeline:
             config=self.config
         )
 
-        logger.info("✓ All assessment agents initialized")
+        logger.info("All assessment agents initialized")
 
     def start_session(self, user_id: str, user_info: Optional[Dict] = None) -> TreeMemory:
         """
@@ -118,10 +95,9 @@ class AssessmentPipeline:
         logger.info(f"User ID: {user_id}")
         logger.info("="*70)
 
-        # Create new memory for this session
-        self.memory = TreeMemory(user_id)
+        
+        self.memory = TreeMemory(user_id) # new memory for this session
 
-        # Set user info if provided
         if user_info:
             self.memory.user.age = user_info.get('age')
             self.memory.user.occupation = user_info.get('occupation')
@@ -155,10 +131,9 @@ class AssessmentPipeline:
         logger.info(f"Assessing topic: {topic_name}")
         logger.info("="*60)
 
-        # Add topic to memory
+        # update memory
         self.memory.add_topic_node(topic_name)
 
-        # Generate initial question
         logger.info("Generating initial question...")
         question = self.question_agent.generate_initial_question(
             topic_config=topic_config,
@@ -168,23 +143,23 @@ class AssessmentPipeline:
 
         follow_up_count = 0
 
-        # Multi-turn conversation loop
+        # topic wise multi-turn conversation loop
         while follow_up_count < self.max_follow_ups:
-            # Get user response
+            
             logger.info(
                 f"Waiting for user response (turn {follow_up_count + 1})...")
             answer = user_response_fn(question)
             logger.info(f"User response received: {answer[:100]}...")
 
-            # Store Q&A in memory
+            
             self.memory.add_qa_pair(topic_name, question, answer)
 
-            # Extract structured information
+            
             statement = self.memory.extract_information(answer)
             self.memory.add_statement(topic_name, statement)
             logger.info(f"Extracted statement: {statement.to_dict()}")
 
-            # Evaluate response adequacy
+            
             logger.info("Evaluating response adequacy...")
             necessity_score = self.evaluation_agent.evaluate_adequacy(
                 topic_config=topic_config,
@@ -193,20 +168,17 @@ class AssessmentPipeline:
             )
             logger.info(f"Necessity score: {necessity_score}")
 
-            # Check if we have adequate information
             if necessity_score < self.necessity_threshold:
                 logger.info("✓ Adequate information collected")
                 break
 
             follow_up_count += 1
 
-            # Check if we've reached max follow-ups
             if follow_up_count >= self.max_follow_ups:
                 logger.info(
                     f"⚠ Max follow-ups ({self.max_follow_ups}) reached")
                 break
 
-            # Generate follow-up question
             logger.info(f"Generating follow-up question {follow_up_count}...")
             question = self.question_agent.generate_followup_question(
                 topic_config=topic_config,
@@ -215,7 +187,6 @@ class AssessmentPipeline:
             )
             logger.info(f"Follow-up question: {question[:100]}...")
 
-        # Score the topic
         logger.info("Scoring topic...")
         score, summary, basis = self.scoring_agent.score_topic(
             topic_config=topic_config,
@@ -223,7 +194,6 @@ class AssessmentPipeline:
             memory=self.memory
         )
 
-        # Update memory with score
         self.memory.update_topic_score(topic_name, score, summary, basis)
 
         logger.info(f"✓ Topic '{topic_name}' scored: {score}")
@@ -254,10 +224,9 @@ class AssessmentPipeline:
         logger.info("STARTING FULL ASSESSMENT")
         logger.info("="*70)
 
-        # Start session
+
         self.start_session(user_id, user_info)
 
-        # Use simulator if no response function provided
         if user_response_fn is None:
             logger.info("No user_response_fn provided, using simulator")
             user_response_fn = self._create_simulator()
@@ -265,7 +234,6 @@ class AssessmentPipeline:
         total_score = 0
         topic_results = []
 
-        # Assess each topic
         for i, topic_config in enumerate(self.topics, 1):
             logger.info(
                 f"\n--- Topic {i}/{len(self.topics)}: {topic_config['name']} ---")
@@ -286,13 +254,10 @@ class AssessmentPipeline:
         logger.info(f"Total Score: {total_score}")
         logger.info("="*70)
 
-        # Determine risk classification
         classification = self._classify_risk(total_score)
 
-        # Detect crisis indicators
         crisis_indicators = self._detect_crisis_indicators()
 
-        # Create assessment results
         assessment_results = {
             'user_id': user_id,
             'user_info': user_info or {},
@@ -389,7 +354,6 @@ class AssessmentPipeline:
         if self.memory is None:
             return crisis_indicators
 
-        # Check all Q&A pairs for crisis keywords
         for topic_name, topic_node in self.memory.topics.items():
             for question, answer in topic_node.qa_pairs:
                 answer_lower = answer.lower()
@@ -493,14 +457,11 @@ def main():
     with open('config.yml', 'r') as f:
         config = yaml.safe_load(f)
 
-    # Initialize LLM
     from utils.llm import LLMOrchestrator
     llm = LLMOrchestrator(config)
 
-    # Create pipeline
     pipeline = AssessmentPipeline(llm, config)
 
-    # Run assessment with simulated user
     user_info = {
         'age': 28,
         'occupation': 'Teacher',
@@ -513,10 +474,8 @@ def main():
         user_response_fn=None  # Uses simulator
     )
 
-    # Generate report
     report = pipeline.generate_assessment_report(results)
 
-    # Display results
     print("\n" + "="*70)
     print("ASSESSMENT RESULTS")
     print("="*70)
@@ -530,7 +489,6 @@ def main():
     print(report)
     print("="*70 + "\n")
 
-    # Save results
     pipeline.save_results(results)
 
 

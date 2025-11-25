@@ -1,13 +1,3 @@
-"""
-PsycheCompass - Main Orchestrator
-
-This is the main entry point that connects:
-1. Assessment Pipeline (PHQ-8 mental health assessment)
-2. Therapeutic Pipeline (Risk-based therapeutic support)
-
-Clean modular architecture for research and production use.
-"""
-
 import yaml
 import json
 import os

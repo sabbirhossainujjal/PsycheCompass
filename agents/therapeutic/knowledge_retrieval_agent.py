@@ -1,13 +1,3 @@
-"""
-Knowledge Retrieval Agent
-
-Supporting agent that retrieves:
-- Crisis hotlines by location
-- Local mental health services
-- Evidence-based resources
-- Self-help materials
-"""
-
 from typing import Dict, List, Optional
 from utils.logger import setup_logger
 from utils.llm import LLMOrchestrator

@@ -1,9 +1,3 @@
-"""
-Scoring Agent
-
-Analyzes conversation history and assigns quantitative scores based on rating criteria.
-"""
-
 import json
 from typing import Dict, Any, Tuple
 from abc import ABC, abstractmethod

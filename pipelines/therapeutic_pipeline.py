@@ -1,18 +1,3 @@
-"""
-Therapeutic Pipeline
-
-Orchestrates the therapeutic subsystem agents:
-- Therapeutic Router
-- Emotional Support Agent
-- Therapeutic Agent
-- Crisis Support Agent
-- Knowledge Retrieval Agent
-- Clinical Validator
-
-This module provides a clean interface for generating therapeutic responses
-based on assessment results.
-"""
-
 import json
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
@@ -21,12 +6,12 @@ from utils.logger import setup_logger
 from utils.llm import LLMOrchestrator
 
 # Import therapeutic agents
-from therapeutic_agents.router import TherapeuticRouter
-from therapeutic_agents.emotional_support_agent import EmotionalSupportAgent
-from therapeutic_agents.therapeutic_agent import TherapeuticAgent
-from therapeutic_agents.crisis_support_agent import CrisisSupportAgent
-from therapeutic_agents.knowledge_retrieval_agent import KnowledgeRetrievalAgent
-from therapeutic_agents.clinical_validator import ClinicalValidator
+from agents.therapeutic.router import TherapeuticRouter
+from agents.therapeutic.emotional_support_agent import EmotionalSupportAgent
+from agents.therapeutic.therapeutic_agent import TherapeuticAgent
+from agents.therapeutic.crisis_support_agent import CrisisSupportAgent
+from agents.therapeutic.knowledge_retrieval_agent import KnowledgeRetrievalAgent
+from agents.therapeutic.clinical_validator import ClinicalValidator
 
 logger = setup_logger('therapeutic_pipeline', 'logs/therapeutic_pipeline.log')
 
@@ -44,13 +29,6 @@ class TherapeuticPipeline:
     """
 
     def __init__(self, llm: LLMOrchestrator, config: Dict):
-        """
-        Initialize therapeutic pipeline
-
-        Args:
-            llm: LLM orchestrator instance
-            config: Configuration dictionary
-        """
         logger.info("="*70)
         logger.info("Initializing Therapeutic Pipeline")
         logger.info("="*70)
@@ -58,7 +36,6 @@ class TherapeuticPipeline:
         self.llm = llm
         self.config = config
 
-        # Check if therapeutic support is enabled
         therapeutic_config = config.get('therapeutic_support', {})
         self.enabled = therapeutic_config.get('enabled', True)
 
@@ -66,20 +43,17 @@ class TherapeuticPipeline:
             logger.warning("⚠ Therapeutic support is disabled in config")
             return
 
-        # Initialize agents
         logger.info("Initializing therapeutic agents...")
         self._initialize_agents()
 
-        # Session tracking
-        self.session_history: List[Dict] = []
+        self.session_history: List[Dict] = [] # for session tracking
 
-        logger.info("✓ Therapeutic Pipeline initialized successfully")
+        logger.info("Therapeutic Pipeline initialized successfully")
         logger.info("="*70)
 
     def _initialize_agents(self):
         """Initialize all therapeutic agents"""
 
-        # Router
         self.router = TherapeuticRouter(self.config)
         logger.info("✓ Therapeutic Router initialized")
 
@@ -90,21 +64,20 @@ class TherapeuticPipeline:
         )
         logger.info("✓ Knowledge Retrieval Agent initialized")
 
-        # Emotional Support Agent (low risk)
+
         self.emotional_support_agent = EmotionalSupportAgent(
             llm=self.llm,
             config=self.config,
             knowledge_agent=self.knowledge_agent
         )
-        logger.info("✓ Emotional Support Agent initialized")
+        logger.info("Emotional Support Agent initialized")
 
-        # Therapeutic Agent (moderate risk)
         self.therapeutic_agent = TherapeuticAgent(
             llm=self.llm,
             config=self.config,
             knowledge_agent=self.knowledge_agent
         )
-        logger.info("✓ Therapeutic Agent initialized")
+        logger.info("Therapeutic Agent initialized")
 
         # Crisis Support Agent (high risk)
         self.crisis_support_agent = CrisisSupportAgent(
@@ -112,14 +85,14 @@ class TherapeuticPipeline:
             config=self.config,
             knowledge_agent=self.knowledge_agent
         )
-        logger.info("✓ Crisis Support Agent initialized")
+        logger.info("Crisis Support Agent initialized")
 
         # Clinical Validator
         self.validator = ClinicalValidator(
             llm=self.llm,
             config=self.config
         )
-        logger.info("✓ Clinical Validator initialized")
+        logger.info("Clinical Validator initialized")
 
     def prepare_therapeutic_input(self, assessment_results: Dict) -> Dict:
         """
@@ -140,7 +113,6 @@ class TherapeuticPipeline:
         topics = assessment_results.get('topics', [])
         user_info = assessment_results.get('user_info', {})
 
-        # Identify key symptoms (highest scoring topics)
         key_symptoms = []
         for topic in topics:
             if topic['score'] >= 2:  # Moderate or higher

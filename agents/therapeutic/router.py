@@ -1,12 +1,3 @@
-"""
-Therapeutic Router
-
-Routes users to appropriate therapeutic agent based on:
-- PHQ-8 assessment score
-- Crisis keyword detection
-- Risk level classification
-"""
-
 from typing import Dict
 from utils.logger import setup_logger
 

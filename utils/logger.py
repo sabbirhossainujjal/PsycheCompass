@@ -1,10 +1,3 @@
-"""
-Logging Configuration Module
-
-Provides centralized logging setup for all components.
-Each component (main, agents, memory, llm) gets its own log file.
-"""
-
 import logging
 import os
 from datetime import datetime

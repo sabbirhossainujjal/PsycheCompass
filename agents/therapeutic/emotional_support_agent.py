@@ -1,10 +1,3 @@
-"""
-Emotional Support Agent
-
-Handles low-risk cases (PHQ-8 Score: 0-4)
-Provides validation, psychoeducation, and self-care guidance
-"""
-
 from typing import Dict, Optional
 from utils.logger import setup_logger
 from utils.llm import LLMOrchestrator

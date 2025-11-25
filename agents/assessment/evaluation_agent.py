@@ -1,9 +1,3 @@
-"""
-Evaluation Agent
-
-Evaluates adequacy of user responses and determines if follow-up questions are needed.
-"""
-
 import json
 from typing import Dict, Any
 from abc import ABC, abstractmethod

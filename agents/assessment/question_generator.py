@@ -1,9 +1,3 @@
-"""
-Question Generator Agent
-
-Generates initial and follow-up questions for mental health assessment topics.
-"""
-
 from typing import Dict, Any
 from abc import ABC, abstractmethod
 

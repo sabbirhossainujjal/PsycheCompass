@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-"""
-PsycheCompass UI Launcher
-
-Quick launcher with environment checks and helpful error messages.
-"""
-
 import sys
 import subprocess
 import os

@@ -3,8 +3,7 @@
 
 # LLM Configuration
 llm:
-  # Provider: 'local' or 'gemini'
-  provider: "gemini"
+  provider: "gemini" #'local' or 'gemini'
 
   # For Gemini API
   model_name: "gemini-2.5-flash" # or 'gemini-1.5-pro'
@@ -14,14 +13,12 @@ llm:
   # model_name: 'Qwen/Qwen2.5-14B-Instruct'
   # base_url: 'http://localhost:8000/v1'  # vLLM or similar endpoint
 
-  # Generation parameters
   temperature: 0.0
   max_tokens: 8192
 
 # Agent Parameters
 agent_params:
-  # Maximum number of follow-up questions per topic
-  max_follow_ups: 3
+  max_follow_ups: 3 # Maximum number of follow-up questions per topic
 
   # Necessity threshold (0-2 scale)
   # If evaluation score < threshold, stop asking follow-ups
@@ -99,9 +96,8 @@ assessment_scale:
         2: "More than half the days"
         3: "Nearly every day"
 
-# Agent Prompts
 agent_prompts:
-  # Question Generator Agent (AGq)
+  # Question Generator Agent
   question_generator:
     initial: |
       You are a compassionate mental health professional conducting a clinical interview.
@@ -145,7 +141,7 @@ agent_prompts:
 
       Generate ONLY the question, no additional text.
 
-  # Evaluation Agent (AGev)
+  # Evaluation Agent
   evaluation: |
     You are an evaluation agent assessing the adequacy of information for clinical diagnosis.
 
@@ -172,7 +168,7 @@ agent_prompts:
 
     Respond with ONLY the numeric score (0, 1, or 2) on the first line, then a brief explanation.
 
-  # Scoring Agent (AGs)
+  # Scoring Agent
   scoring: |
     You are a clinical scoring agent. Analyze the conversation and assign a score.
 
@@ -195,7 +191,7 @@ agent_prompts:
 
     Be objective and base your scoring strictly on the frequency and severity described by the user.
 
-  # Updating Agent (AGu)
+  # Updating Agent
   updating: |
     You are a clinical report generation agent. Create a comprehensive assessment summary.
 
@@ -225,7 +221,7 @@ agent_prompts:
        - Resources or support options
        - Follow-up considerations
 
-    Use empathetic, professional language. Be clear but supportive.
+    Use empathetic, professional language. Be clear and supportive.
 
 # ============================================================================
 # THERAPEUTIC SUPPORT CONFIGURATION
@@ -237,7 +233,6 @@ therapeutic_support:
 
   # Routing Configuration
   routing:
-    # Score thresholds for routing
     low_risk_max: 4        # Scores 0-4: Emotional Support Agent
     moderate_risk_min: 5   # Scores 5-14: Therapeutic Agent
     moderate_risk_max: 14
@@ -258,7 +253,6 @@ therapeutic_support:
       - "not worth living"
       - "thoughts of death"
 
-  # Agent-specific configurations
   agents:
     emotional_support:
       techniques:

@@ -1,14 +1,3 @@
-"""
-Clinical Validator
-
-Validates therapeutic responses before delivery to ensure:
-- No harmful advice
-- No medication recommendations
-- No diagnosis statements
-- Appropriate crisis resources (when needed)
-- Clinical safety and appropriateness
-"""
-
 from typing import Dict
 from utils.logger import setup_logger
 from utils.llm import LLMOrchestrator

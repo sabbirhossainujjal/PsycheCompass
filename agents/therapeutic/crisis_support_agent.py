@@ -1,10 +1,3 @@
-"""
-Crisis Support Agent
-
-Handles high-risk cases (PHQ-8 Score: 15+) and detected crisis situations
-Provides immediate crisis intervention with SAFETY as absolute priority
-"""
-
 from typing import Dict, Optional
 from utils.logger import setup_logger
 from utils.llm import LLMOrchestrator

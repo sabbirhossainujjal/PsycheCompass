@@ -1,14 +1,3 @@
-"""
-Therapeutic Agent
-
-Handles moderate-risk cases (PHQ-8 Score: 5-14)
-Provides evidence-based therapeutic interventions:
-- Cognitive Behavioral Therapy (CBT)
-- Behavioral Activation
-- Problem-Solving Therapy
-- Mindfulness techniques
-"""
-
 from typing import Dict, Optional
 from utils.logger import setup_logger
 from utils.llm import LLMOrchestrator
