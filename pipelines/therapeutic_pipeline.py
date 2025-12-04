@@ -269,7 +269,6 @@ class TherapeuticPipeline:
                 'response': None
             }
 
-        # Prepare input
         therapeutic_input = self.prepare_therapeutic_input(assessment_results)
         therapeutic_input['user_message'] = user_message
 
@@ -285,7 +284,7 @@ class TherapeuticPipeline:
 
         logger.info(f"Routing to {agent_type} agent for follow-up...")
 
-        # Generate follow-up response
+        # follow-up response
         if agent_type == 'crisis':
             response = self.crisis_support_agent.continue_conversation(
                 user_message=user_message,
@@ -307,7 +306,6 @@ class TherapeuticPipeline:
                 assessment_results=therapeutic_input
             )
 
-        # Validate
         validated_response = self.validator.validate(
             therapeutic_response=response,
             risk_level=therapeutic_input['risk_level'],
@@ -320,7 +318,6 @@ class TherapeuticPipeline:
             'timestamp': datetime.now().isoformat()
         }
 
-        # Update history
         self.session_history.append({
             'type': 'user_message',
             'message': user_message,

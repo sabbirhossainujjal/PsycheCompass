@@ -26,7 +26,7 @@ class LLMOrchestrator:
         self.provider = LLMProvider(config['llm']['provider'])
         self.model_name = config['llm']['model_name']
         self.temperature = config['llm'].get('temperature', 0.0)
-        self.max_tokens = config['llm'].get('max_tokens', 1024)
+        self.max_tokens = config['llm'].get('max_tokens', 12288)
 
         logger.info(f"Provider: {self.provider.value}")
         logger.info(f"Model: {self.model_name}")
@@ -51,7 +51,6 @@ class LLMOrchestrator:
 
         try:
             import google.generativeai as genai
-
             # Get API key from environment if not provided
             if not api_key:
                 api_key = os.environ.get('GEMINI_API_KEY')
@@ -64,7 +63,9 @@ class LLMOrchestrator:
                 )
 
             genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel(self.model_name)
+            self.model = genai.GenerativeModel(self.model_name,
+
+                                               )
 
             logger.info("Gemini API initialized successfully")
 
@@ -159,6 +160,7 @@ class LLMOrchestrator:
 
     def _generate_gemini(self, prompt: str, **kwargs) -> str:
         """Generate response using Gemini API"""
+        from google.generativeai.types import HarmCategory, HarmBlockThreshold
         logger.debug("Using Gemini API for generation")
 
         temperature = kwargs.get('temperature', self.temperature)
@@ -170,28 +172,16 @@ class LLMOrchestrator:
         }
 
         logger.debug(f"Generation config: {generation_config}")
-
+        safety_settings = {
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+        }
         response = self.model.generate_content(
             prompt,
             generation_config=generation_config,
-            safety_settings=[
-                {
-                    "category": "HARM_CATEGORY_HARASSMENT",
-                    "threshold": "BLOCK_NONE",
-                },
-                {
-                    "category": "HARM_CATEGORY_HATE_SPEECH",
-                    "threshold": "BLOCK_NONE",
-                },
-                {
-                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                    "threshold": "BLOCK_NONE",
-                },
-                {
-                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                    "threshold": "BLOCK_NONE",
-                },
-            ]
+            safety_settings=safety_settings
         )
 
         if response.parts:

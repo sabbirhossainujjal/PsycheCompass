@@ -26,3 +26,7 @@ technical_docs.md
 examples.py
 *.ipynb
 test_therapy_agents.py
+
+results
+rag_*
+utils/assessment_eval_helper.py
