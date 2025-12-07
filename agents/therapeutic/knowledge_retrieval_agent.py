@@ -224,28 +224,66 @@ class KnowledgeRetrievalAgent:
         
         return services
     
-    def get_therapy_technique_info(self, technique: str) -> str:
-        """
-        Get information about specific therapy technique
+    # def get_therapy_technique_info(self, technique: str) -> str:
+    #     """
+    #     Get information about specific therapy technique
         
-        Args:
-            technique: Therapy technique name (e.g., 'CBT', 'Behavioral Activation')
+    #     Args:
+    #         technique: Therapy technique name (e.g., 'CBT', 'Behavioral Activation')
             
-        Returns:
-            Technique information
-        """
+    #     Returns:
+    #         Technique information
+    #     """
+    #     logger.info(f"Retrieving information for technique: {technique}")
+        
+    #     technique_upper = technique.upper()
+        
+    #     # Try exact match first
+    #     if technique_upper in self.therapy_resources:
+    #         info = self.therapy_resources[technique_upper]
+    #     # Try partial match
+    #     else:
+    #         info = None
+    #         for key in self.therapy_resources:
+    #             if technique_upper in key or key in technique_upper:
+    #                 info = self.therapy_resources[key]
+    #                 break
+        
+    #     if not info:
+    #         logger.warning(f"No information found for technique: {technique}")
+    #         return ""
+        
+    #     output = f"**{info['name']}:**\n"
+    #     output += f"{info['description']}\n\n"
+        
+    #     if 'self_help' in info:
+    #         output += f"Self-Help Resource: {info['self_help']}\n"
+        
+    #     if 'books' in info:
+    #         output += f"Recommended Reading: {info['books']}\n"
+        
+    #     if 'technique' in info:
+    #         output += f"Quick Technique: {info['technique']}\n"
+        
+    #     logger.info("Technique information retrieved")
+        
+    #     return output
+    def get_therapy_technique_info(self, technique: str) -> str:
+        """Get information about specific therapy technique"""
         logger.info(f"Retrieving information for technique: {technique}")
         
-        technique_upper = technique.upper()
+        # Normalize: behavioral_activation -> Behavioral Activation
+        technique_normalized = technique.replace('_', ' ').title()
         
-        # Try exact match first
-        if technique_upper in self.therapy_resources:
-            info = self.therapy_resources[technique_upper]
-        # Try partial match
+        # Try exact match
+        if technique_normalized in self.therapy_resources:
+            info = self.therapy_resources[technique_normalized]
         else:
+            # Try case-insensitive partial match
             info = None
+            technique_lower = technique_normalized.lower()
             for key in self.therapy_resources:
-                if technique_upper in key or key in technique_upper:
+                if technique_lower in key.lower() or key.lower() in technique_lower:
                     info = self.therapy_resources[key]
                     break
         
@@ -253,6 +291,7 @@ class KnowledgeRetrievalAgent:
             logger.warning(f"No information found for technique: {technique}")
             return ""
         
+        # Format output
         output = f"**{info['name']}:**\n"
         output += f"{info['description']}\n\n"
         
@@ -266,7 +305,6 @@ class KnowledgeRetrievalAgent:
             output += f"Quick Technique: {info['technique']}\n"
         
         logger.info("Technique information retrieved")
-        
         return output
     
     def search_web(self, query: str) -> str:

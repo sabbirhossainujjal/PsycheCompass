@@ -241,7 +241,7 @@ Given the severity of your symptoms, it's important to consult with a mental hea
         )
         
         try:
-            validation_result = self.llm.generate(prompt, max_tokens=512, temperature=0.0)
+            validation_result = self.llm.generate(prompt, max_tokens=8192, temperature=0.0)
             
             logger.debug(f"Validation result: {validation_result[:200]}...")
             

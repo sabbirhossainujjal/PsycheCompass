@@ -77,7 +77,7 @@ class TherapeuticAgent:
         logger.debug(f"Prompt length: {len(full_prompt)} characters")
         
         try:
-            response = self.llm.generate(full_prompt, max_tokens=2048)
+            response = self.llm.generate(full_prompt, max_tokens=8192)
             logger.info("Response generated successfully")
             logger.debug(f"Response length: {len(response)} characters")
             
@@ -302,7 +302,7 @@ Keep your response focused and conversational (2-4 paragraphs).
 """
         
         try:
-            response = self.llm.generate(prompt, max_tokens=1024)
+            response = self.llm.generate(prompt, max_tokens=8192)
             logger.info("Follow-up response generated")
             return response
             

@@ -93,7 +93,7 @@ class CrisisSupportAgent:
 
         try:
             response = self.llm.generate(
-                full_prompt, max_tokens=2048, temperature=0.0)
+                full_prompt, max_tokens=8192, temperature=0.0)
             logger.critical("Crisis response generated")
 
             # ENSURE crisis hotline is in response
