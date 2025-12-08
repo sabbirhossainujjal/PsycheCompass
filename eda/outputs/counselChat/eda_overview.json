@@ -1,0 +1,47 @@
+{
+  "n_rows": 2129,
+  "n_cols": 12,
+  "columns": [
+    "Unnamed: 0",
+    "questionID",
+    "questionTitle",
+    "questionText",
+    "questionLink",
+    "topic",
+    "therapistInfo",
+    "therapistURL",
+    "answerText",
+    "upvotes",
+    "views",
+    "split"
+  ],
+  "dtypes": {
+    "Unnamed: 0": "int64",
+    "questionID": "int64",
+    "questionTitle": "object",
+    "questionText": "object",
+    "questionLink": "object",
+    "topic": "object",
+    "therapistInfo": "object",
+    "therapistURL": "object",
+    "answerText": "object",
+    "upvotes": "int64",
+    "views": "int64",
+    "split": "object"
+  },
+  "missing_values": {
+    "Unnamed: 0": 0,
+    "questionID": 0,
+    "questionTitle": 0,
+    "questionText": 0,
+    "questionLink": 0,
+    "topic": 0,
+    "therapistInfo": 0,
+    "therapistURL": 0,
+    "answerText": 0,
+    "upvotes": 0,
+    "views": 0,
+    "split": 0
+  },
+  "duplicates_exact": 0
+}

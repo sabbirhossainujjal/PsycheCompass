@@ -1,0 +1,66 @@
+import pandas as pd
+from wordcloud import WordCloud
+import matplotlib.pyplot as plt
+from pathlib import Path
+
+def generate_wordcloud(csv_path, output_path, title=None, max_words=200, background_color="white"):
+    """
+    Generate a word cloud image from a CSV file containing 'word,count' columns.
+    """
+    df = pd.read_csv(csv_path)
+    if 'word' not in df.columns or 'count' not in df.columns:
+        raise ValueError("CSV must have 'word' and 'count' columns")
+
+    freq_dict = dict(zip(df['word'], df['count']))
+
+    wc = WordCloud(
+        width=1600,
+        height=800,
+        background_color=background_color,
+        max_words=max_words,
+        collocations=False,
+        prefer_horizontal=0.9
+    ).generate_from_frequencies(freq_dict)
+
+    plt.figure(figsize=(10, 5))
+    plt.imshow(wc, interpolation='bilinear')
+    plt.axis("off")
+    if title:
+        plt.title(title, fontsize=16)
+    plt.tight_layout()
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+
+    print(f"Saved wordcloud -> {output_path}")
+
+# ===== Generate all wordclouds =====
+
+# CounselChat – questions
+generate_wordcloud(
+    csv_path=r"mentalagent/notebooks/outputs/counselChat/top_question_words.csv",
+    output_path=r"mentalagent/notebooks/fig/data_analysis_counselchat/question_wordcloud.png",
+    title="Most Frequent Words – CounselChat Questions"
+)
+
+# Psych8k – inputs
+generate_wordcloud(
+    csv_path=r"mentalagent/notebooks/outputs/Psych8k/top_input_words.csv",
+    output_path=r"mentalagent/notebooks/fig/data_analysis_psych8k/input_wordcloud.png",
+    title="Most Frequent Words – Psych8k Inputs"
+)
+
+# CounselChat – answers
+generate_wordcloud(
+    csv_path=r"mentalagent/notebooks/outputs/counselChat/top_answer_words.csv",
+    output_path=r"mentalagent/notebooks/fig/data_analysis_counselchat/answer_wordcloud.png",
+    title="Most Frequent Words – CounselChat Answers"
+)
+
+# Psych8k – outputs
+generate_wordcloud(
+    csv_path=r"mentalagent/notebooks/outputs/Psych8k/top_output_words.csv",
+    output_path=r"mentalagent/notebooks/fig/data_analysis_psych8k/output_wordcloud.png",
+    title="Most Frequent Words – Psych8k Outputs"
+)

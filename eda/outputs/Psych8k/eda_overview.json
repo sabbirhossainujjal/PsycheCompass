@@ -1,0 +1,36 @@
+{
+  "n_rows": 8187,
+  "n_cols": 4,
+  "columns": [
+    "output",
+    "input",
+    "instruction",
+    "__split__"
+  ],
+  "dtypes": {
+    "output": "object",
+    "input": "object",
+    "instruction": "object",
+    "__split__": "object"
+  },
+  "sample_rows": [
+    {
+      "output": "Thank you for sharing your experience with me. It sounds like you've been dealing with a mix of symptoms, and I can understand how that can be concerning. Before I can provide any feedback or guidance, can you please tell me more about your experience? For example, how long have these feelings of disconnection been happening, and are there any other symptoms you've noticed recently? It would also be helpful to know about any stressors in your life right now or any history of mental health issues in your family. This information will help me understand your situation better.",
+      "input": "Lately, I've been feeling really disconnected from reality. I often find it hard to distinguish between what's real and what's not. For example, last week, I was having dinner with my family, and I suddenly thought my brother was about to attack me. I know it doesn't make any sense, but it felt real in that moment. This has happened a few times, but not all the time. I'm also having a hard time concentrating and remembering things that have happened recently. I've had some depressive episodes in the past, but this seems a bit different to me. Can you help me figure out what's going on?",
+      "instruction": "If you are a counsellor, please answer the questions based on the description of the patient.",
+      "__split__": "train"
+    },
+    {
+      "output": "Thank you for sharing your experience with me. It sounds like you have been going through a difficult time, and it's important to acknowledge that. Can you provide more details about how your low mood and difficulty focusing have been affecting your daily life, as well as any specific events or triggers that you have noticed? Additionally, it would be helpful to know about any changes in your sleep patterns, appetite, or any other physical or emotional symptoms you're experiencing. This will help me better understand your situation and provide appropriate support.",
+      "input": "Lately, I've been feeling really stressed and it's affecting me a lot. Sometimes I find it hard to focus on what people are saying, or I get easily confused. I have noticed that my mood has been low for weeks now, but I haven't had any hallucinations or delusions. One day, I was walking in a crowded place and suddenly, I felt completely detached from everyone around me; it was like seeing the world through a thick fog. My family says that I am being distant and they worry about me, and I'm starting to worry about myself too.",
+      "instruction": "If you are a counsellor, please answer the questions based on the description of the patient.",
+      "__split__": "train"
+    },
+    {
+      "output": "I appreciate you sharing your concerns with me. It's good to hear that you can still function normally, but it's crucial to figure out what might be causing these feelings of being 'off.' It would be helpful if you could provide more information about any stressors in your life or any major changes you've experienced recently. Additionally, if these unusual events happen again, please let me know so we can better understand what could be triggering them.",
+      "input": "Lately, I've been feeling a bit off. I sometimes find it hard to focus and concentrate on tasks, but it doesn't happen too often. I have been feeling a bit disconnected from my friends, but we still hang out and talk normally. My sleeping habits haven't changed much, but I occasionally have some vivid dreams. For the past two months, there were two unusual events where I saw flashes of light that weren't there. I don't think I've experienced any hallucinations, though. My performance at work hasn't been affected, and I can still function normally.",
+      "instruction": "If you are a counsellor, please answer the questions based on the description of the patient.",
+      "__split__": "train"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+,instruction_len_words,input_len_words,output_len_words,instruction_sents,input_sents,output_sents
+instruction_len_words,,,,,,
+input_len_words,,1.0,0.557,,0.825,0.4
+output_len_words,,0.557,1.0,,0.453,0.724
+instruction_sents,,,,,,
+input_sents,,0.825,0.453,,1.0,0.387
+output_sents,,0.4,0.724,,0.387,1.0
